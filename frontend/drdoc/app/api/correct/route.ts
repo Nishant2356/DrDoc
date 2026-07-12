@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     await prisma.generatedNote.update({
       where: { id: noteId },
       data: {
-        noteContent: newState.draftNote,
+        noteContent: newState.draftNote as string,
       },
     });
     
@@ -50,14 +50,14 @@ export async function POST(req: NextRequest) {
       if (newState.doctorPreferences && newState.doctorPreferences !== "") {
         await prisma.clinicalProfile.update({
           where: { userId: note.user.id },
-          data: { notePreferences: newState.doctorPreferences }
+          data: { notePreferences: newState.doctorPreferences as string }
         });
         console.log("Updated doctor profile with continuous learning feedback.");
       }
     }
 
     return NextResponse.json({ 
-      note: newState.draftNote, 
+      note: newState.draftNote as string, 
     });
 
   } catch (err) {
