@@ -17,6 +17,8 @@
     "@langchain/groq": "^1.2.0",
     "@langchain/langgraph": "^1.2.9",
     "@langchain/openai": "^1.4.4",
+    "@prisma/client": "^7.8.0",
+    "prisma": "^7.8.0",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

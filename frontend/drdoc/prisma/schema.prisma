@@ -1,0 +1,99 @@
+datasource db {
+  provider = "postgresql"
+}
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  DOCTOR
+  PATIENT
+}
+
+// ==========================================
+// USER MODEL
+// Stores doctor/patient accounts
+// ==========================================
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String   // hashed password
+  role      Role     @default(DOCTOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One doctor can have one clinical profile (their "note generation knowledge")
+  clinicalProfile ClinicalProfile?
+
+  // One doctor can generate many notes
+  generatedNotes GeneratedNote[]
+
+  @@map("users")
+}
+
+// ==========================================
+// CLINICAL PROFILE MODEL
+// The doctor's "note generation knowledge" — their specialties,
+// preferred medicines, and note formatting preferences.
+// This is what the RAG/knowledge retrieval node reads from.
+// ==========================================
+
+model ClinicalProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 1. What type of clinical doctor are you (field of medicine)?
+  //    e.g. ["Allopathic", "Homeopathic", "Ayurvedic", "General Practice"]
+  specialties String[]
+
+  // 2. What different medicines do you generally prescribe?
+  //    e.g. ["Nux Vomica", "Arsenic Album", "Amoxicillin", "Azithromycin"]
+  commonMedicines String[]
+
+  // 3. The specific preferences/protocols for how notes should be generated.
+  //    This is the free-text block that gets injected into the LLM prompts
+  //    (replaces the current `mockDoctorProfile` string).
+  notePreferences String @db.Text
+
+  // Relation back to User
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_profiles")
+}
+
+// ==========================================
+// GENERATED NOTE MODEL
+// Stores every clinical note the AI produces,
+// linked to the doctor who created it.
+// ==========================================
+
+model GeneratedNote {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Patient information (name, age, gender, etc.) — stored as JSON
+  patientInfo Json
+
+  // The final approved clinical note text
+  noteContent String @db.Text
+
+  // Optional: the original transcript that produced this note
+  originalTranscript String? @db.Text
+
+  // Relation back to the doctor who generated it
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("generated_notes")
+}
