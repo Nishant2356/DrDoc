@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
           data: {
             userId: user.id,
             patientInfo: state.patientInfo || {},
-            noteContent: state.draftNote,
+            noteContent: state.draftNote as string,
             originalTranscript: transcriptText
           }
         });
