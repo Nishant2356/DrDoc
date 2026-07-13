@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { drDocAgent } from "../../lib/agent/index";
 import { prisma } from "../../lib/db";
-import Groq from "groq-sdk";
+import Groq, { toFile } from "groq-sdk";
 
 // Initialize Groq SDK for transcription
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No audio provided" }, { status: 400 });
     }
 
-    // 1. Convert the Blob to a File object for the Groq SDK
-    const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
+    // 1. Convert the Blob to a Buffer and use toFile for the Groq SDK
+    const buffer = Buffer.from(await audioBlob.arrayBuffer());
+    const file = await toFile(buffer, "recording.webm", { type: "audio/webm" });
 
     // 2. Transcribe Audio using Whisper API via Groq
     console.log("Transcribing audio...");
