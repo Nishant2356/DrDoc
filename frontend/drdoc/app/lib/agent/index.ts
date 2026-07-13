@@ -6,6 +6,23 @@ import { ChatGroq } from "@langchain/groq";
 import { simplellm } from "./tools";
 import { autoCorrectorPrompt, feedbackIntegratorPrompt, generateNotePrompt, mockDoctorProfile, piiRedactionPrompt, rootCauseAnalyzerPrompt, safetyGuardrailPrompt, updateDatabasePrompt } from "./prompts";
 
+// Helper to extract the first valid JSON object by counting braces
+function extractJSON(text: string): string {
+  const startIdx = text.indexOf('{');
+  if (startIdx === -1) throw new Error("No JSON object found");
+  
+  let depth = 0;
+  for (let i = startIdx; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') depth--;
+    
+    if (depth === 0) {
+      return text.substring(startIdx, i + 1);
+    }
+  }
+  throw new Error("Incomplete JSON object found");
+}
+
 // ==========================================
 export interface DrDocState {
   originalTranscript: string;
@@ -54,7 +71,10 @@ const piiRedactionNode = async (state: DrDocState) => {
   try {
     // 4. Call LLM
     const response = await llm.invoke([systemPrompt, userPrompt]);
-    const cleanJsonText = (response.content as string).replace(/```json/g, '').replace(/```/g, '').trim();
+    const content = response.content as string;
+    
+    // Extract JSON in case the LLM added conversational filler
+    const cleanJsonText = extractJSON(content);
     const result = JSON.parse(cleanJsonText);
 
     // 5. Return the updated state
@@ -153,7 +173,7 @@ const safetyGuardrailNode = async (state: DrDocState) => {
     // 5. Clean and parse the JSON output
     // (We strip out markdown backticks just in case the LLM disobeys the 'no formatting' rule)
     const resultText = response.content as string;
-    const cleanJsonText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanJsonText = extractJSON(resultText);
 
     const evaluation = JSON.parse(cleanJsonText);
 
@@ -306,7 +326,8 @@ const rootCauseAnalyzerNode = async (state: DrDocState) => {
     const response = await llm.invoke([systemPrompt, userPrompt]);
 
     // 5. Parse the JSON
-    const cleanJsonText = (response.content as string).replace(/```json/g, '').replace(/```/g, '').trim();
+    const content = response.content as string;
+    const cleanJsonText = extractJSON(content);
     const analysis = JSON.parse(cleanJsonText);
 
     console.log(`   🕵️ Root Cause Detected: ${analysis.rootCause}`);
@@ -438,8 +459,15 @@ const workflow = new StateGraph<DrDocState>({ channels: graphState as any })
   })
   .addEdge("update_database", END);
 
-// 1. Initialize an in-memory checkpointer
-const memory = new MemorySaver();
+// 1. Initialize an in-memory checkpointer as a global singleton
+const globalForLangGraph = globalThis as unknown as {
+  memorySaver: MemorySaver | undefined;
+};
+
+const memory = globalForLangGraph.memorySaver ?? new MemorySaver();
+if (process.env.NODE_ENV !== "production") {
+  globalForLangGraph.memorySaver = memory;
+}
 
 // 2. Add it to the compiled graph
 export const drDocAgent = workflow.compile({

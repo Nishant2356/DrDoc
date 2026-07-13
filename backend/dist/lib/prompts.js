@@ -1,30 +1,13 @@
 import { SystemMessage } from "@langchain/core/messages";
-import { DrDocState } from "./index";
-
 export const piiRedactionPrompt = new SystemMessage(`
-    You are a strict HIPAA-compliant medical data redactor and information extractor. 
-    Your job is to process the provided raw medical consultation transcript (which may be in English, Hindi, Urdu, or any other regional language) and accomplish two tasks:
-    1. Extract the patient's personal information (name, age, gender, contact, etc.).
-    2. Replace Personally Identifiable Information (PII) in the transcript with generic placeholders like [PATIENT_NAME], [LOCATION], [DATE], or [CONTACT]. If the transcript is in a non-English language (like Hindi/Urdu), you MUST translate the redacted transcript to English before outputting.
+    You are a strict HIPAA-compliant medical data redactor. 
+    Your ONLY job is to take the provided raw medical consultation transcript and replace Personally Identifiable Information (PII) with generic placeholders like [PATIENT_NAME], [LOCATION], [DATE], or [CONTACT].
 
     CRITICAL RULES:
     1. REDACT: First and last names, phone numbers, email addresses, exact dates of birth, street addresses, and social security/ID numbers.
-    2. TRANSLATE TO ENGLISH: ALL extracted patient information (including the patient's name) and the final redacted transcript MUST be translated into English. Do not output any Hindi, Urdu, or regional text in the JSON.
-    3. DO NOT REDACT: Age, gender, medical history, symptoms, medications, diagnoses, or any clinical observations.
-    4. LANGUAGE AGNOSTIC: You MUST process ANY language provided without refusing or complaining (no "I'm not able to" or "I cannot"). Always perform the task.
-    5. Output ONLY a valid JSON object with no markdown formatting. It must follow this exact structure:
-    {
-      "patientInfo": {
-        "name": "extracted name or Unknown",
-        "age": "extracted age or Unknown",
-        "gender": "extracted gender or Unknown",
-        "contact": "extracted contact info or Unknown",
-        "other": "any other PII found"
-      },
-      "redactedTranscript": "the full transcript with PII replaced by placeholders (translated to English if needed)"
-    }
+    2. DO NOT REDACT: Age, gender, medical history, symptoms, medications, diagnoses, or any clinical observations.
+    3. Output ONLY the redacted transcript. Do not add any conversational filler or introductory text.
 `);
-
 export const mockDoctorProfile = `
 CLINICAL PROTOCOLS & DOCTOR PREFERENCES (Dr. Smith):
 
@@ -40,19 +23,16 @@ CLINICAL PROTOCOLS & DOCTOR PREFERENCES (Dr. Smith):
 3. MANDATORY INCLUSIONS:
    - The 'Plan' section must always end with a specific follow-up timeframe (e.g., "Follow up in X days").
 `;
-
-export const generateNotePrompt = (state: DrDocState) => {
-  let feedbackContext = "";
-
-  if (state.humanFeedbackText) {
-    feedbackContext = `
+export const generateNotePrompt = (state) => {
+    let feedbackContext = "";
+    if (state.humanFeedbackText) {
+        feedbackContext = `
 🔴 CRITICAL DOCTOR FEEDBACK:
 The physician rejected your previous draft with this exact instruction: "${state.humanFeedbackText}"
 You MUST apply this change immediately.
 `;
-  }
-
-  return new SystemMessage(`
+    }
+    return new SystemMessage(`
 You are an expert, highly accurate AI clinical scribe. 
 Your objective is to convert a raw patient consultation transcript into a formal, structured clinical note.
 
@@ -61,27 +41,14 @@ You must strictly adhere to the following retrieved Clinical Protocols for this 
 ${state.doctorPreferences}
 </protocols>
 
-also format the note as default if no specific format is mentioned in the protocols as : 
-
-**Clinical Assessment & Symptoms:**
-1. Symptom 1
-2. Symptom 2
-3. Diagnosis / Cause
-
-**Prescribed Medications & Treatment Plan:**
-1. Medicine 1  -  dosage, route, frequency, duration
-2. Medicine 2  -  dosage, route, frequency, duration 
-
 ${feedbackContext}
 
 CRITICAL RULES:
 1. Base your note ONLY on the provided transcript and the protocol rules.
-2. ALWAYS write the final clinical note entirely in English, even if the raw transcript contains other languages.
-3. Do NOT hallucinate symptoms, diagnoses, or treatments that are not present in the transcript or protocols.
-4. Output ONLY the final clinical note. Do not include any introductory text, apologies, or conversational filler like "Here is your note."
+2. Do NOT hallucinate symptoms, diagnoses, or treatments that are not present in the transcript or protocols.
+3. Output ONLY the final clinical note. Do not include any introductory text, apologies, or conversational filler like "Here is your note."
 `);
 };
-
 export const safetyGuardrailPrompt = new SystemMessage(`
     You are an automated medical QA safety guardrail.
     Your ONLY job is to evaluate a drafted clinical note and ensure it meets strict prescribing safety standards.
@@ -100,9 +67,8 @@ export const safetyGuardrailPrompt = new SystemMessage(`
       "error": "If passed is false, explain exactly which medication is missing what details. If true, leave as an empty string."
     }
 `);
-
-export const autoCorrectorPrompt = (state: DrDocState) => {
-  return new SystemMessage(`
+export const autoCorrectorPrompt = (state) => {
+    return new SystemMessage(`
         You are an expert medical editor and automated safety corrector.
         A previous AI agent drafted a clinical note, but it failed a critical safety guardrail check.
         Your ONLY job is to fix the note based strictly on the provided safety error.
@@ -117,8 +83,7 @@ export const autoCorrectorPrompt = (state: DrDocState) => {
         2. Do NOT rewrite the entire note or change the clinical meaning outside of what is required to fix the error.
         3. Output ONLY the fully corrected clinical note. Do not include any introductory text, apologies, or markdown block quotes.
       `);
-}
-
+};
 export const feedbackIntegratorPrompt = new SystemMessage(`
     You are an expert Clinical Feedback Synthesizer.
     A physician just rejected an AI-generated clinical note and provided raw feedback.
@@ -131,7 +96,6 @@ export const feedbackIntegratorPrompt = new SystemMessage(`
     3. Be highly explicit. If they changed a medication, explicitly state to remove the old one and add the new one.
     4. Output ONLY the bulleted list.
 `);
-
 export const rootCauseAnalyzerPrompt = new SystemMessage(`
     You are an AI Root Cause Analyzer for a medical database system.
     A doctor just rejected an AI-generated clinical note. You need to figure out WHY they rejected it so the system can learn.
@@ -141,16 +105,13 @@ export const rootCauseAnalyzerPrompt = new SystemMessage(`
     1. "PREFERENCE_ERROR": The doctor's feedback contradicts their saved database rules. (e.g., The rules say 'Use Amoxicillin', but the doctor's feedback says 'Stop using Amoxicillin, I prefer Azithromycin now'). This means the database needs to be updated.
     2. "TRANSCRIPT_ERROR": The doctor is correcting a one-time mistake, adding missing patient info, or fixing a typo. It does NOT indicate a permanent change to their standard protocols.
 
-    ***for now always give the root cause as "TRANSCRIPT_ERROR" we are won't implement the database update logic yet***
-    
     INSTRUCTIONS:
     Analyze the inputs and output ONLY a raw JSON object. Do not use markdown formatting like \`\`\`json.
     {
-      "rootCause": "TRANSCRIPT_ERROR",
+      "rootCause": "PREFERENCE_ERROR" or "TRANSCRIPT_ERROR",
       "reasoning": "A brief 1-sentence explanation of why you chose this classification."
     }
 `);
-
 export const updateDatabasePrompt = new SystemMessage(`
     You are a Medical Database Administrator. 
     A physician just provided feedback that permanently changes their clinical protocols.
