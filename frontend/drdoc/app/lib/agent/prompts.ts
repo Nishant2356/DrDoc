@@ -40,17 +40,17 @@ CLINICAL PROTOCOLS & DOCTOR PREFERENCES (Dr. Smith):
 `;
 
 export const generateNotePrompt = (state: DrDocState) => {
-    let feedbackContext = "";
+  let feedbackContext = "";
 
-    if (state.humanFeedbackText) {
-        feedbackContext = `
+  if (state.humanFeedbackText) {
+    feedbackContext = `
 🔴 CRITICAL DOCTOR FEEDBACK:
 The physician rejected your previous draft with this exact instruction: "${state.humanFeedbackText}"
 You MUST apply this change immediately.
 `;
-    }
+  }
 
-    return new SystemMessage(`
+  return new SystemMessage(`
 You are an expert, highly accurate AI clinical scribe. 
 Your objective is to convert a raw patient consultation transcript into a formal, structured clinical note.
 
@@ -64,7 +64,8 @@ ${feedbackContext}
 CRITICAL RULES:
 1. Base your note ONLY on the provided transcript and the protocol rules.
 2. Do NOT hallucinate symptoms, diagnoses, or treatments that are not present in the transcript or protocols.
-3. Output ONLY the final clinical note. Do not include any introductory text, apologies, or conversational filler like "Here is your note."
+3. Do NOT include any patient identity information or PII placeholders (like [PATIENT_NAME], [CONTACT], etc.) in the final clinical note. The note should focus purely on the clinical assessment, symptoms, and plan.
+4. Output ONLY the final clinical note. Do not include any introductory text, apologies, or conversational filler like "Here is your note."
 `);
 };
 
@@ -88,7 +89,7 @@ export const safetyGuardrailPrompt = new SystemMessage(`
 `);
 
 export const autoCorrectorPrompt = (state: DrDocState) => {
-    return new SystemMessage(`
+  return new SystemMessage(`
         You are an expert medical editor and automated safety corrector.
         A previous AI agent drafted a clinical note, but it failed a critical safety guardrail check.
         Your ONLY job is to fix the note based strictly on the provided safety error.
@@ -127,6 +128,8 @@ export const rootCauseAnalyzerPrompt = new SystemMessage(`
     1. "PREFERENCE_ERROR": The doctor's feedback contradicts their saved database rules. (e.g., The rules say 'Use Amoxicillin', but the doctor's feedback says 'Stop using Amoxicillin, I prefer Azithromycin now'). This means the database needs to be updated.
     2. "TRANSCRIPT_ERROR": The doctor is correcting a one-time mistake, adding missing patient info, or fixing a typo. It does NOT indicate a permanent change to their standard protocols.
 
+    ***for now always give the root cause as "TRANSCRIPT_ERROR" we are won't implement the database update logic yet***
+    
     INSTRUCTIONS:
     Analyze the inputs and output ONLY a raw JSON object. Do not use markdown formatting like \`\`\`json.
     {

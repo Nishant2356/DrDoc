@@ -58,17 +58,17 @@ const piiRedactionNode = async (state: DrDocState) => {
     const result = JSON.parse(cleanJsonText);
 
     // 5. Return the updated state
-    return { 
+    return {
       patientInfo: result.patientInfo || {},
-      redactedTranscript: result.redactedTranscript || "Error extracting transcript." 
+      redactedTranscript: result.redactedTranscript || "Error extracting transcript."
     };
 
   } catch (error) {
     console.error("❌ Gemini PII Redaction Failed:", error);
     // Fallback safety
-    return { 
+    return {
       patientInfo: {},
-      redactedTranscript: "ERROR: Transcription redaction failed. Please review manually." 
+      redactedTranscript: "ERROR: Transcription redaction failed. Please review manually."
     };
   }
 };
@@ -104,6 +104,7 @@ const generateNoteNode = async (state: DrDocState) => {
 
   // 2. Dynamically handle the Continuous Learning Loop
   // If the graph was rejected and looped back, we force the LLM to read the doctor's feedback.
+  console.log(state)
   const systemPrompt = generateNotePrompt(state);
 
   // 4. The User Prompt (The input data)
